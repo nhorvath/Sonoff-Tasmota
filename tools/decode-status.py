@@ -48,11 +48,11 @@ from StringIO import StringIO
 
 a_on_off = ["OFF","ON "]
 
-a_setoption = [
+a_setoption = [[
     "Save power state and use after restart",
     "Restrict button actions to single, double and hold",
     "Show value units in JSON messages",
-    "MQTT",
+    "MQTT enabled",
     "Respond as Command topic instead of RESULT",
     "MQTT retain on Power",
     "MQTT retain on Button",
@@ -72,14 +72,26 @@ a_setoption = [
     "Do not control Power with Dimmer",
     "Energy monitoring while powered off",
     "MQTT serial",
-    "Rules until 5.14.0b",
+    "MQTT serial binary",
     "Rules once mode until 5.14.0b",
-    "KNX",
+    "KNX enabled",
     "Use Power device index on single relay devices",
     "KNX enhancement",
     "RF receive decimal",
     "IR receive decimal",
-    "Enforce HASS light group",""]
+    "Enforce HASS light group",
+    "Do not show Wifi and Mqtt state using Led"
+    ],[
+    "Timers enabled",
+    "","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","","",
+    "","","",""
+    ]]
 
 a_features = [[
     "","","USE_I2C","USE_SPI",
@@ -89,12 +101,12 @@ a_features = [[
     "USE_WS2812_DMA","USE_IR_REMOTE","USE_IR_HVAC","USE_IR_RECEIVE",
     "USE_DOMOTICZ","USE_DISPLAY","USE_HOME_ASSISTANT","USE_SERIAL_BRIDGE",
     "USE_TIMERS","USE_SUNRISE","USE_TIMERS_WEB","USE_RULES",
-    "USE_KNX","","",""
+    "USE_KNX","USE_WPS","USE_SMARTCONFIG",""
     ],[
-    "USE_CONFIG_OVERRIDE","BE_MINIMAL","USE_ALL_SENSORS","USE_CLASSIC",
-    "USE_KNX_NO_EMULATION","","","",
-    "","","","",
-    "","","","",
+    "USE_CONFIG_OVERRIDE","BE_MINIMAL","USE_SENSORS","USE_CLASSIC",
+    "USE_KNX_NO_EMULATION","USE_DISPLAY_MODES1TO5","USE_DISPLAY_GRAPH","USE_DISPLAY_LCD",
+    "USE_DISPLAY_SSD1306","USE_DISPLAY_MATRIX","USE_DISPLAY_ILI9341","USE_DISPLAY_EPAPER",
+    "USE_DISPLAY_SH1106","","","",
     "","","","",
     "","","","",
     "","","VTABLES_IN_FLASH","PIO_FRAMEWORK_ARDUINO_LWIP_HIGHER_BANDWIDTH",
@@ -109,8 +121,8 @@ a_features = [[
     "USE_SGP30","USE_SR04","USE_SDM120","USE_SI1145",
     "USE_SDM630","USE_LM75AD","USE_APDS9960","USE_TM1638"
     ],[
-    "","","","",
-    "","","","",
+    "USE_MCP230xx","USE_MPR121","USE_CCS811","USE_MPU6050",
+    "USE_MCP230xx_OUTPUT","USE_MCP230xx_DISPLAYOUTPUT","","",
     "","","","",
     "","","","",
     "","","","",
@@ -143,43 +155,61 @@ else:
     fp.close()
 
 def StartDecode():
+    print ("\n*** decode-status.py v20180730 by Theo Arends ***")
+
 #    print("Decoding\n{}".format(obj))
 
-    if ("Time" in obj["StatusSNS"]):
-        time = str(" from status report taken at {}".format(obj["StatusSNS"]["Time"]))
-    if ("FriendlyName" in obj["Status"]):
-        print("\nDecoding information for device {}{}".format(obj["Status"]["FriendlyName"][0], time))
+    if ("StatusSNS" in obj):
+        if ("Time" in obj["StatusSNS"]):
+            time = str(" from status report taken at {}".format(obj["StatusSNS"]["Time"]))
 
-    if ("SetOption" in obj["StatusLOG"]):
-        options = []
-        option = obj["StatusLOG"]["SetOption"][0]
-        i_option = int(option,16)
-        for i in range(len(a_setoption)):
-            if (a_setoption[i]):
-                state = (i_option >> i) & 1
-                options.append(str("{0:2d} ({1}) {2}".format(i, a_on_off[state], a_setoption[i])))
+    if ("Status" in obj):
+        if ("FriendlyName" in obj["Status"]):
+            print("Decoding information for device {}{}".format(obj["Status"]["FriendlyName"][0], time))
 
-        print("\nOptions")
-        for i in range(len(options)):
-            print("  {}".format(options[i]))
+    if ("StatusLOG" in obj):
+        if ("SetOption" in obj["StatusLOG"]):
+            options = []
+            o = 0
+            p = 0
 
+            r = 1
+            if (len(obj["StatusLOG"]["SetOption"]) == 3):
+                r = 2
 
-    if ("Features" in obj["StatusMEM"]):
-        features = []
-        for f in range(5):
-            feature = obj["StatusMEM"]["Features"][f]
-            i_feature = int(feature,16)
-            if (f == 0):
-                features.append(str("Language LCID = {}".format(i_feature & 0xFFFF)))
-            else:
-                for i in range(len(a_features[f -1])):
-                    if ((i_feature >> i) & 1):
-                        features.append(a_features[f -1][i])
+            for f in range(r):
+                if (f == 1):
+                    o = 2
+                    p = 50
 
-        features.sort()
-        print("\nFeatures")
-        for i in range(len(features)):
-            print("  {}".format(features[i]))
+                option = obj["StatusLOG"]["SetOption"][o]
+                i_option = int(option,16)
+                for i in range(len(a_setoption[f])):
+                    if (a_setoption[f][i]):
+                        state = (i_option >> i) & 1
+                        options.append(str("{0:2d} ({1}) {2}".format(i + p, a_on_off[state], a_setoption[f][i])))
+
+            print("\nOptions")
+            for i in range(len(options)):
+                print("  {}".format(options[i]))
+
+    if ("StatusMEM" in obj):
+        if ("Features" in obj["StatusMEM"]):
+            features = []
+            for f in range(5):
+                feature = obj["StatusMEM"]["Features"][f]
+                i_feature = int(feature,16)
+                if (f == 0):
+                    features.append(str("Language LCID = {}".format(i_feature & 0xFFFF)))
+                else:
+                    for i in range(len(a_features[f -1])):
+                        if ((i_feature >> i) & 1):
+                            features.append(a_features[f -1][i])
+
+            features.sort()
+            print("\nFeatures")
+            for i in range(len(features)):
+                print("  {}".format(features[i]))
 
 if __name__ == "__main__":
     try:

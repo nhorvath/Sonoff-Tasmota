@@ -28,7 +28,7 @@
  * Use online command StateText to translate ON, OFF, HOLD and TOGGLE.
  * Use online command Prefix to translate cmnd, stat and tele.
  *
- * Updated until v6.0.0a
+ * Updated until v6.2.0.1
 \*********************************************************************/
 
 //#define LANGUAGE_MODULE_NAME         // Enable to display "Module Generic" (ie Spanish), Disable to display "Generic Module" (ie English)
@@ -60,10 +60,12 @@
 #define D_BLINKOFF "Мигане изкл."
 #define D_BOOT_COUNT "Брой на стартиранията"
 #define D_BRIGHTLIGHT "Яркост"
+#define D_BSSID "BSSId"
 #define D_BUTTON "Бутон"
 #define D_BY "от"                    // Written by me
 #define D_BYTES "Байта"
 #define D_CELSIUS "Целзий"
+#define D_CHANNEL "Канал"
 #define D_CO2 "Въглероден диоксид"
 #define D_CODE "код"                // Button code
 #define D_COLDLIGHT "Хладна"
@@ -206,6 +208,7 @@
 #define D_ERASED_SECTOR "Изтрит сектор"
 
 // xdrv_02_webserver.ino
+#define D_NOSCRIPT "Разрешете JavaScript, за да използвате Tasmota"
 #define D_MINIMAL_FIRMWARE_PLEASE_UPGRADE "Минимален фърмуеър - моля надградете го"
 #define D_WEBSERVER_ACTIVE_ON "Уеб сървърът е активен на"
 #define D_WITH_IP_ADDRESS "с IP адрес"
@@ -379,6 +382,7 @@
 // xdrv_09_timers.ino
 #define D_CONFIGURE_TIMER "Конфигуриране на таймер"
 #define D_TIMER_PARAMETERS "Параметри на таймера"
+#define D_TIMER_ENABLE "Активиране на таймера"
 #define D_TIMER_ARM "Arm"
 #define D_TIMER_TIME "Време"
 #define D_TIMER_DAYS "Дни"
@@ -434,6 +438,14 @@
 #define D_STANDARD_CONCENTRATION "CF-1 PM"     // Standard Particle CF-1 Particle Matter
 #define D_ENVIRONMENTAL_CONCENTRATION "PM"     // Environmetal Particle Matter
 #define D_PARTICALS_BEYOND "Частици"
+
+// xsns_32_mpu6050.ino
+#define D_AX_AXIS "Ускорение - ос X"
+#define D_AY_AXIS "Ускорение - ос Y"
+#define D_AZ_AXIS "Ускорение - ос Z"
+#define D_GX_AXIS "Жироскоп - ос X"
+#define D_GY_AXIS "Жироскоп - ос Y"
+#define D_GZ_AXIS "Жироскоп - ос Z"
 
 // sonoff_template.h
 #define D_SENSOR_NONE     "Няма"

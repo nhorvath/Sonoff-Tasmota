@@ -82,6 +82,10 @@ String GetResetReason()
   }
 }
 
+boolean OsWatchBlockedLoop()
+{
+  return oswatch_blocked_loop;
+}
 /*********************************************************************************************\
  * Miscellaneous
 \*********************************************************************************************/
@@ -130,12 +134,30 @@ size_t strchrspn(const char *str1, int character)
   return ret;
 }
 
+// Function to return a substring defined by a delimiter at an index
+char* subStr(char* dest, char* str, const char *delim, int index)
+{
+  char *act;
+  char *sub;
+  char *ptr;
+  int i;
+
+  // Since strtok consumes the first arg, make a copy
+  strlcpy(dest, str, strlen(str));
+  for (i = 1, act = dest; i <= index; i++, act = NULL) {
+    sub = strtok_r(act, delim, &ptr);
+    if (sub == NULL) break;
+  }
+  sub = Trim(sub);
+  return sub;
+}
+
 double CharToDouble(char *str)
 {
   // simple ascii to double, because atof or strtod are too large
   char strbuf[24];
 
-  strcpy(strbuf, str);
+  strlcpy(strbuf, str, sizeof(strbuf));
   char *pt;
   double left = atoi(strbuf);
   double right = 0;
@@ -159,6 +181,17 @@ double CharToDouble(char *str)
   double result = left + right;
   if (left < 0) { result = left - right; }
   return result;
+}
+
+int TextToInt(char *str)
+{
+  char *p;
+  uint8_t radix = 10;
+  if ('#' == str[0]) {
+    radix = 16;
+    str++;
+  }
+  return strtol(str, &p, radix);
 }
 
 char* dtostrfd(double number, unsigned char prec, char *s)
@@ -280,6 +313,31 @@ char* NoAlNumToUnderscore(char* dest, const char* source)
   return dest;
 }
 
+void SetShortcut(char* str, uint8_t action)
+{
+  if ('\0' != str[0]) {     // There must be at least one character in the buffer
+    str[0] = '0' + action;  // SC_CLEAR, SC_DEFAULT, SC_USER
+    str[1] = '\0';
+  }
+}
+
+uint8_t Shortcut(const char* str)
+{
+  uint8_t result = 10;
+
+  if ('\0' == str[1]) {    // Only allow single character input for shortcut
+    if (('"' == str[0]) || ('0' == str[0])) {
+      result = SC_CLEAR;
+    } else {
+      result = atoi(str);  // 1 = SC_DEFAULT, 2 = SC_USER
+      if (0 == result) {
+        result = 10;
+      }
+    }
+  }
+  return result;
+}
+
 boolean ParseIp(uint32_t* addr, const char* str)
 {
   uint8_t *part = (uint8_t*)addr;
@@ -396,6 +454,22 @@ char TempUnit()
   return (Settings.flag.temperature_conversion) ? 'F' : 'C';
 }
 
+void SetGlobalValues(float temperature, float humidity)
+{
+  global_update = uptime;
+  global_temperature = temperature;
+  global_humidity = humidity;
+}
+
+void ResetGlobalValues()
+{
+  if ((uptime - global_update) > GLOBAL_VALUES_VALID) {  // Reset after 5 minutes
+    global_update = 0;
+    global_temperature = 0;
+    global_humidity = 0;
+  }
+}
+
 double FastPrecisePow(double a, double b)
 {
   // https://martin.ankerl.com/2012/01/25/optimized-approximative-pow-in-c-and-cpp/
@@ -487,13 +561,13 @@ int GetStateNumber(char *state_text)
   char command[CMDSZ];
   int state_number = -1;
 
-  if ((GetCommandCode(command, sizeof(command), state_text, kOptionOff) >= 0) || !strcasecmp(state_text, Settings.state_text[0])) {
+  if (GetCommandCode(command, sizeof(command), state_text, kOptionOff) >= 0) {
     state_number = 0;
   }
-  else if ((GetCommandCode(command, sizeof(command), state_text, kOptionOn) >= 0) || !strcasecmp(state_text, Settings.state_text[1])) {
+  else if (GetCommandCode(command, sizeof(command), state_text, kOptionOn) >= 0) {
     state_number = 1;
   }
-  else if ((GetCommandCode(command, sizeof(command), state_text, kOptionToggle) >= 0) || !strcasecmp(state_text, Settings.state_text[2])) {
+  else if (GetCommandCode(command, sizeof(command), state_text, kOptionToggle) >= 0) {
     state_number = 2;
   }
   else if (GetCommandCode(command, sizeof(command), state_text, kOptionBlink) >= 0) {
@@ -643,6 +717,78 @@ void ShowSource(int source)
   }
 }
 
+uint8_t ValidGPIO(uint8_t pin, uint8_t gpio)
+{
+  uint8_t result = gpio;
+  if ((WEMOS == Settings.module) && (!Settings.flag3.user_esp8285_enable)) {
+    if ((pin == 9) || (pin == 10)) { result = GPIO_NONE; }  // Disable possible flash GPIO9 and GPIO10
+  }
+  return result;
+}
+
+/*********************************************************************************************\
+ * Sleep aware time scheduler functions borrowed from ESPEasy
+\*********************************************************************************************/
+
+long TimeDifference(unsigned long prev, unsigned long next)
+{
+  // Return the time difference as a signed value, taking into account the timers may overflow.
+  // Returned timediff is between -24.9 days and +24.9 days.
+  // Returned value is positive when "next" is after "prev"
+  long signed_diff = 0;
+  // To cast a value to a signed long, the difference may not exceed half 0xffffffffUL (= 4294967294)
+  const unsigned long half_max_unsigned_long = 2147483647u;  // = 2^31 -1
+  if (next >= prev) {
+    const unsigned long diff = next - prev;
+    if (diff <= half_max_unsigned_long) {                    // Normal situation, just return the difference.
+      signed_diff = static_cast<long>(diff);                 // Difference is a positive value.
+    } else {
+      // prev has overflow, return a negative difference value
+      signed_diff = static_cast<long>((0xffffffffUL - next) + prev + 1u);
+      signed_diff = -1 * signed_diff;
+    }
+  } else {
+    // next < prev
+    const unsigned long diff = prev - next;
+    if (diff <= half_max_unsigned_long) {                    // Normal situation, return a negative difference value
+      signed_diff = static_cast<long>(diff);
+      signed_diff = -1 * signed_diff;
+    } else {
+      // next has overflow, return a positive difference value
+      signed_diff = static_cast<long>((0xffffffffUL - prev) + next + 1u);
+    }
+  }
+  return signed_diff;
+}
+
+long TimePassedSince(unsigned long timestamp)
+{
+  // Compute the number of milliSeconds passed since timestamp given.
+  // Note: value can be negative if the timestamp has not yet been reached.
+  return TimeDifference(timestamp, millis());
+}
+
+bool TimeReached(unsigned long timer)
+{
+  // Check if a certain timeout has been reached.
+  const long passed = TimePassedSince(timer);
+  return (passed >= 0);
+}
+
+void SetNextTimeInterval(unsigned long& timer, const unsigned long step)
+{
+  timer += step;
+  const long passed = TimePassedSince(timer);
+  if (passed < 0) { return; }   // Event has not yet happened, which is fine.
+  if (static_cast<unsigned long>(passed) > step) {
+    // No need to keep running behind, start again.
+    timer = millis() + step;
+    return;
+  }
+  // Try to get in sync again.
+  timer = millis() + (step - passed);
+}
+
 /*********************************************************************************************\
  * Fill feature list
 \*********************************************************************************************/
@@ -712,7 +858,7 @@ void GetFeatures()
   feature_drv1 |= 0x00100000;  // xdrv_07_domoticz.ino
 #endif
 #ifdef USE_DISPLAY
-  feature_drv1 |= 0x00200000;  // xdrv_98_display.ino
+  feature_drv1 |= 0x00200000;  // xdrv_13_display.ino
 #endif
 #ifdef USE_HOME_ASSISTANT
   feature_drv1 |= 0x00400000;  // xdrv_12_home_assistant.ino
@@ -735,6 +881,12 @@ void GetFeatures()
 #ifdef USE_KNX
   feature_drv1 |= 0x10000000;  // xdrv_11_knx.ino
 #endif
+#ifdef USE_WPS
+  feature_drv1 |= 0x20000000;  // support.ino
+#endif
+#ifdef USE_SMARTCONFIG
+  feature_drv1 |= 0x40000000;  // support.ino
+#endif
 
 /*********************************************************************************************/
 
@@ -746,7 +898,7 @@ void GetFeatures()
 #ifdef BE_MINIMAL
   feature_drv2 |= 0x00000002;  // user_config(_override).h
 #endif
-#ifdef USE_ALL_SENSORS
+#ifdef USE_SENSORS
   feature_drv2 |= 0x00000004;  // user_config(_override).h
 #endif
 #ifdef USE_CLASSIC
@@ -754,6 +906,30 @@ void GetFeatures()
 #endif
 #ifdef USE_KNX_NO_EMULATION
   feature_drv2 |= 0x00000010;  // user_config(_override).h
+#endif
+#ifdef USE_DISPLAY_MODES1TO5
+  feature_drv2 |= 0x00000020;  // xdrv_13_display.ino
+#endif
+#ifdef USE_DISPLAY_GRAPH
+  feature_drv2 |= 0x00000040;  // xdrv_13_display.ino
+#endif
+#ifdef USE_DISPLAY_LCD
+  feature_drv2 |= 0x00000080;  // xdsp_01_lcd.ino
+#endif
+#ifdef USE_DISPLAY_SSD1306
+  feature_drv2 |= 0x00000100;  // xdsp_02_ssd1306.ino
+#endif
+#ifdef USE_DISPLAY_MATRIX
+  feature_drv2 |= 0x00000200;  // xdsp_03_matrix.ino
+#endif
+#ifdef USE_DISPLAY_ILI9341
+  feature_drv2 |= 0x00000400;  // xdsp_04_ili9341.ino
+#endif
+#ifdef USE_DISPLAY_EPAPER
+  feature_drv2 |= 0x00000800;  // xdsp_05_epaper.ino
+#endif
+#ifdef USE_DISPLAY_SH1106
+  feature_drv2 |= 0x00001000;  // xdsp_06_sh1106.ino
 #endif
 
 
@@ -879,6 +1055,25 @@ void GetFeatures()
 /*********************************************************************************************/
 
   feature_sns2 = 0x00000000;
+
+#ifdef USE_MCP230xx
+  feature_sns2 |= 0x00000001;  // xsns_29_mcp230xx.ino
+#endif
+#ifdef USE_MPR121
+  feature_sns2 |= 0x00000002;  // xsns_30_mpr121.ino
+#endif
+#ifdef USE_CCS811
+  feature_sns2 |= 0x00000004;  // xsns_31_ccs811.ino
+#endif
+#ifdef USE_MPU6050
+  feature_sns2 |= 0x00000008;  // xsns_32_mpu6050.ino
+#endif
+#ifdef USE_MCP230xx_OUTPUT
+  feature_sns2 |= 0x00000010;  // xsns_29_mcp230xx.ino
+#endif
+#ifdef USE_MCP230xx_DISPLAYOUTPUT
+  feature_sns2 |= 0x00000020;  // xsns_29_mcp230xx.ino
+#endif
 }
 
 /*********************************************************************************************\
@@ -954,42 +1149,49 @@ boolean WifiWpsConfigDone(void)
 boolean WifiWpsConfigBegin(void)
 {
   wps_result = 99;
-  if (!wifi_wps_disable()) {
-    return false;
-  }
-  if (!wifi_wps_enable(WPS_TYPE_PBC)) {
-    return false;  // so far only WPS_TYPE_PBC is supported (SDK 2.0.0)
-  }
-  if (!wifi_set_wps_cb((wps_st_cb_t) &WifiWpsStatusCallback)) {
-    return false;
-  }
-  if (!wifi_wps_start()) {
-    return false;
-  }
+  if (!wifi_wps_disable()) { return false; }
+  if (!wifi_wps_enable(WPS_TYPE_PBC)) { return false; }  // so far only WPS_TYPE_PBC is supported (SDK 2.0.0)
+  if (!wifi_set_wps_cb((wps_st_cb_t) &WifiWpsStatusCallback)) { return false; }
+  if (!wifi_wps_start()) { return false; }
   return true;
 }
 
 void WifiConfig(uint8_t type)
 {
   if (!wifi_config_type) {
-    if (type >= WIFI_RETRY) {  // WIFI_RETRY and WIFI_WAIT
-      return;
-    }
+    if ((WIFI_RETRY == type) || (WIFI_WAIT == type)) { return; }
 #if defined(USE_WEBSERVER) && defined(USE_EMULATION)
     UdpDisconnect();
 #endif  // USE_EMULATION
-    WiFi.disconnect();        // Solve possible Wifi hangs
+    WiFi.disconnect();                       // Solve possible Wifi hangs
     wifi_config_type = type;
+
+#ifndef USE_WPS
+    if (WIFI_WPSCONFIG == wifi_config_type) { wifi_config_type = WIFI_MANAGER; }
+#endif  // USE_WPS
+#ifndef USE_WEBSERVER
+    if (WIFI_MANAGER == wifi_config_type) { wifi_config_type = WIFI_SMARTCONFIG; }
+#endif  // USE_WEBSERVER
+#ifndef USE_SMARTCONFIG
+    if (WIFI_SMARTCONFIG == wifi_config_type) { wifi_config_type = WIFI_SERIAL; }
+#endif  // USE_SMARTCONFIG
+
     wifi_config_counter = WIFI_CONFIG_SEC;   // Allow up to WIFI_CONFIG_SECS seconds for phone to provide ssid/pswd
     wifi_counter = wifi_config_counter +5;
     blinks = 1999;
     if (WIFI_RESTART == wifi_config_type) {
       restart_flag = 2;
     }
+    else if (WIFI_SERIAL == wifi_config_type) {
+      AddLog_P(LOG_LEVEL_INFO, S_LOG_WIFI, PSTR(D_WCFG_6_SERIAL " " D_ACTIVE_FOR_3_MINUTES));
+    }
+#ifdef USE_SMARTCONFIG
     else if (WIFI_SMARTCONFIG == wifi_config_type) {
       AddLog_P(LOG_LEVEL_INFO, S_LOG_WIFI, PSTR(D_WCFG_1_SMARTCONFIG " " D_ACTIVE_FOR_3_MINUTES));
       WiFi.beginSmartConfig();
     }
+#endif  // USE_SMARTCONFIG
+#ifdef USE_WPS
     else if (WIFI_WPSCONFIG == wifi_config_type) {
       if (WifiWpsConfigBegin()) {
         AddLog_P(LOG_LEVEL_INFO, S_LOG_WIFI, PSTR(D_WCFG_3_WPSCONFIG " " D_ACTIVE_FOR_3_MINUTES));
@@ -998,6 +1200,7 @@ void WifiConfig(uint8_t type)
         wifi_config_counter = 3;
       }
     }
+#endif  // USE_WPS
 #ifdef USE_WEBSERVER
     else if (WIFI_MANAGER == wifi_config_type) {
       AddLog_P(LOG_LEVEL_INFO, S_LOG_WIFI, PSTR(D_WCFG_2_WIFIMANAGER " " D_ACTIVE_FOR_3_MINUTES));
@@ -1005,6 +1208,31 @@ void WifiConfig(uint8_t type)
     }
 #endif  // USE_WEBSERVER
   }
+}
+
+void WiFiSetSleepMode()
+{
+/* Excerpt from the esp8266 non os sdk api reference (v2.2.1):
+ * Sets sleep type for power saving. Set WIFI_NONE_SLEEP to disable power saving.
+ * - Default mode: WIFI_MODEM_SLEEP.
+ * - In order to lower the power comsumption, ESP8266 changes the TCP timer
+ *   tick from 250ms to 3s in WIFI_LIGHT_SLEEP mode, which leads to increased timeout for
+ *   TCP timer. Therefore, the WIFI_MODEM_SLEEP or deep-sleep mode should be used
+ *   where there is a requirement for the accurancy of the TCP timer.
+ *
+ * Sleep is disabled in core 2.4.1 and 2.4.2 as there are bugs in their SDKs
+ * See https://github.com/arendst/Sonoff-Tasmota/issues/2559
+ */
+
+//#ifdef ARDUINO_ESP8266_RELEASE_2_4_1
+#if defined(ARDUINO_ESP8266_RELEASE_2_4_1) || defined(ARDUINO_ESP8266_RELEASE_2_4_2)
+#else  // Enabled in 2.3.0, 2.4.0 and stage
+  if (sleep) {
+    WiFi.setSleepMode(WIFI_LIGHT_SLEEP);  // Allow light sleep during idle times
+  } else {
+    WiFi.setSleepMode(WIFI_MODEM_SLEEP);  // Diable sleep (Esp8288/Arduino core and sdk default)
+  }
+#endif
 }
 
 void WifiBegin(uint8_t flag)
@@ -1023,17 +1251,9 @@ void WifiBegin(uint8_t flag)
   WiFi.disconnect(true);    // Delete SDK wifi config
   delay(200);
   WiFi.mode(WIFI_STA);      // Disable AP mode
-  if (Settings.sleep) {
-#ifndef ARDUINO_ESP8266_RELEASE_2_4_1     // See https://github.com/arendst/Sonoff-Tasmota/issues/2559
-    WiFi.setSleepMode(WIFI_LIGHT_SLEEP);  // Allow light sleep during idle times
-#endif
-  }
-//  if (WiFi.getPhyMode() != WIFI_PHY_MODE_11N) {
-//    WiFi.setPhyMode(WIFI_PHY_MODE_11N);
-//  }
-  if (!WiFi.getAutoConnect()) {
-    WiFi.setAutoConnect(true);
-  }
+  WiFiSetSleepMode();
+//  if (WiFi.getPhyMode() != WIFI_PHY_MODE_11N) { WiFi.setPhyMode(WIFI_PHY_MODE_11N); }
+  if (!WiFi.getAutoConnect()) { WiFi.setAutoConnect(true); }
 //  WiFi.setAutoReconnect(true);
   switch (flag) {
   case 0:  // AP1
@@ -1043,9 +1263,7 @@ void WifiBegin(uint8_t flag)
   case 2:  // Toggle
     Settings.sta_active ^= 1;
   }        // 3: Current AP
-  if (0 == strlen(Settings.sta_ssid[1])) {
-    Settings.sta_active = 0;
-  }
+  if ('\0' == Settings.sta_ssid[Settings.sta_active][0]) { Settings.sta_active ^= 1; }  // Skip empty SSID
   if (Settings.ip_address[0]) {
     WiFi.config(Settings.ip_address[0], Settings.ip_address[1], Settings.ip_address[2], Settings.ip_address[3]);  // Set static IP
   }
@@ -1056,9 +1274,22 @@ void WifiBegin(uint8_t flag)
   AddLog(LOG_LEVEL_INFO);
 }
 
+void WifiState(uint8_t state)
+{
+  if (state == global_state.wifi_down) {
+    if (state) {
+      rules_flag.wifi_connected = 1;
+    } else {
+      rules_flag.wifi_disconnected = 1;
+    }
+  }
+  global_state.wifi_down = state ^1;
+}
+
 void WifiCheckIp()
 {
   if ((WL_CONNECTED == WiFi.status()) && (static_cast<uint32_t>(WiFi.localIP()) != 0)) {
+    WifiState(1);
     wifi_counter = WIFI_CHECK_SEC;
     wifi_retry = wifi_retry_init;
     AddLog_P((wifi_status != WL_CONNECTED) ? LOG_LEVEL_INFO : LOG_LEVEL_DEBUG_MORE, S_LOG_WIFI, PSTR(D_CONNECTED));
@@ -1070,6 +1301,8 @@ void WifiCheckIp()
     }
     wifi_status = WL_CONNECTED;
   } else {
+    WifiState(0);
+    uint8_t wifi_config_tool = Settings.sta_config;
     wifi_status = WiFi.status();
     switch (wifi_status) {
       case WL_CONNECTED:
@@ -1103,7 +1336,12 @@ void WifiCheckIp()
         if (!wifi_retry || ((wifi_retry_init / 2) == wifi_retry)) {
           AddLog_P(LOG_LEVEL_INFO, S_LOG_WIFI, PSTR(D_CONNECT_FAILED_AP_TIMEOUT));
         } else {
-          AddLog_P(LOG_LEVEL_DEBUG, S_LOG_WIFI, PSTR(D_ATTEMPTING_CONNECTION));
+          if (('\0' == Settings.sta_ssid[0][0]) && ('\0' == Settings.sta_ssid[1][0])) {
+            wifi_config_tool = WIFI_CONFIG_NO_SSID;    // Skip empty SSIDs and start Wifi config tool
+            wifi_retry = 0;
+          } else {
+            AddLog_P(LOG_LEVEL_DEBUG, S_LOG_WIFI, PSTR(D_ATTEMPTING_CONNECTION));
+          }
         }
     }
     if (wifi_retry) {
@@ -1116,7 +1354,7 @@ void WifiCheckIp()
       wifi_counter = 1;
       wifi_retry--;
     } else {
-      WifiConfig(Settings.sta_config);
+      WifiConfig(wifi_config_tool);
       wifi_counter = 1;
       wifi_retry = wifi_retry_init;
     }
@@ -1127,6 +1365,7 @@ void WifiCheck(uint8_t param)
 {
   wifi_counter--;
   switch (param) {
+  case WIFI_SERIAL:
   case WIFI_SMARTCONFIG:
   case WIFI_MANAGER:
   case WIFI_WPSCONFIG:
@@ -1137,12 +1376,16 @@ void WifiCheck(uint8_t param)
       wifi_config_counter--;
       wifi_counter = wifi_config_counter +5;
       if (wifi_config_counter) {
+#ifdef USE_SMARTCONFIG
         if ((WIFI_SMARTCONFIG == wifi_config_type) && WiFi.smartConfigDone()) {
           wifi_config_counter = 0;
         }
+#endif  // USE_SMARTCONFIG
+#ifdef USE_WPS
         if ((WIFI_WPSCONFIG == wifi_config_type) && WifiWpsConfigDone()) {
           wifi_config_counter = 0;
         }
+#endif  // USE_WPS
         if (!wifi_config_counter) {
           if (strlen(WiFi.SSID().c_str())) {
             strlcpy(Settings.sta_ssid[0], WiFi.SSID().c_str(), sizeof(Settings.sta_ssid[0]));
@@ -1156,9 +1399,9 @@ void WifiCheck(uint8_t param)
         }
       }
       if (!wifi_config_counter) {
-        if (WIFI_SMARTCONFIG == wifi_config_type) {
-          WiFi.stopSmartConfig();
-        }
+#ifdef USE_SMARTCONFIG
+        if (WIFI_SMARTCONFIG == wifi_config_type) { WiFi.stopSmartConfig(); }
+#endif  // USE_SMARTCONFIG
 //        SettingsSdkErase();  //  Disabled v6.1.0b due to possible bad wifi connects
         restart_flag = 2;
       }
@@ -1169,6 +1412,7 @@ void WifiCheck(uint8_t param)
         WifiCheckIp();
       }
       if ((WL_CONNECTED == WiFi.status()) && (static_cast<uint32_t>(WiFi.localIP()) != 0) && !wifi_config_type) {
+        WifiState(1);
 #ifdef BE_MINIMAL
         if (1 == RtcSettings.ota_loader) {
           RtcSettings.ota_loader = 0;
@@ -1194,9 +1438,7 @@ void WifiCheck(uint8_t param)
           StopWebserver();
         }
 #ifdef USE_EMULATION
-        if (Settings.flag2.emulation) {
-          UdpConnect();
-        }
+        if (Settings.flag2.emulation) { UdpConnect(); }
 #endif  // USE_EMULATION
 #endif  // USE_WEBSERVER
 #ifdef USE_KNX
@@ -1206,6 +1448,7 @@ void WifiCheck(uint8_t param)
         }
 #endif  // USE_KNX
       } else {
+        WifiState(0);
 #if defined(USE_WEBSERVER) && defined(USE_EMULATION)
         UdpDisconnect();
 #endif  // USE_EMULATION
@@ -1225,9 +1468,7 @@ int WifiState()
   if ((WL_CONNECTED == WiFi.status()) && (static_cast<uint32_t>(WiFi.localIP()) != 0)) {
     state = WIFI_RESTART;
   }
-  if (wifi_config_type) {
-    state = wifi_config_type;
-  }
+  if (wifi_config_type) { state = wifi_config_type; }
   return state;
 }
 
@@ -1883,7 +2124,6 @@ void RtcInit()
  * ADC support
 \*********************************************************************************************/
 
-uint8_t adc_counter = 0;
 uint16_t adc_last_value = 0;
 
 uint16_t AdcRead()
@@ -1898,17 +2138,14 @@ uint16_t AdcRead()
 }
 
 #ifdef USE_RULES
-void AdcEvery50ms()
+void AdcEvery250ms()
 {
-  adc_counter++;
-  if (!(adc_counter % 4)) {
-    uint16_t new_value = AdcRead();
-    if ((new_value < adc_last_value -10) || (new_value > adc_last_value +10)) {
-      adc_last_value = new_value;
-      uint16_t value = adc_last_value / 10;
-      snprintf_P(mqtt_data, sizeof(mqtt_data), PSTR("{\"ANALOG\":{\"A0div10\":%d}}"), (value > 99) ? 100 : value);
-      XdrvRulesProcess();
-    }
+  uint16_t new_value = AdcRead();
+  if ((new_value < adc_last_value -10) || (new_value > adc_last_value +10)) {
+    adc_last_value = new_value;
+    uint16_t value = adc_last_value / 10;
+    snprintf_P(mqtt_data, sizeof(mqtt_data), PSTR("{\"ANALOG\":{\"A0div10\":%d}}"), (value > 99) ? 100 : value);
+    XdrvRulesProcess();
   }
 }
 #endif  // USE_RULES
@@ -1939,8 +2176,8 @@ boolean Xsns02(byte function)
   if (pin[GPIO_ADC0] < 99) {
     switch (function) {
 #ifdef USE_RULES
-      case FUNC_EVERY_50_MSECOND:
-        AdcEvery50ms();
+      case FUNC_EVERY_250_MSECOND:
+        AdcEvery250ms();
         break;
 #endif  // USE_RULES
       case FUNC_JSON_APPEND:
@@ -2083,6 +2320,12 @@ void AddLogSerial(byte loglevel, uint8_t *buffer, int count)
 void AddLogSerial(byte loglevel)
 {
   AddLogSerial(loglevel, (uint8_t*)serial_in_buffer, serial_in_byte_counter);
+}
+
+void AddLogMissed(char *sensor, uint8_t misses)
+{
+  snprintf_P(log_data, sizeof(log_data), PSTR("SNS: %s missed %d"), sensor, SENSOR_MAX_MISS - misses);
+  AddLog(LOG_LEVEL_DEBUG);
 }
 
 /*********************************************************************************************\

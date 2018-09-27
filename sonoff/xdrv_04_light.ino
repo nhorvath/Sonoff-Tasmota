@@ -783,16 +783,12 @@ void LightAnimate()
         if (light_type < LT_PWM6) {
           if (pin[GPIO_PWM1 +i] < 99) {
             if (cur_col[i] > 0xFC) {
-              // Fix unwanted blinking and PWM watchdog errors for values close to pwm_range (H801, Arilux and BN-SZ01)
-//              snprintf_P(log_data, sizeof(log_data), PSTR(D_LOG_APPLICATION "Cur_Col%d %d > 252 using digitalWrite instead of PWM"), i, cur_col[i]);
-//              AddLog(LOG_LEVEL_DEBUG);
-              digitalWrite(pin[GPIO_PWM1 +i], bitRead(pwm_inverted, i) ? LOW : HIGH);
-            } else {
-              uint16_t curcol = cur_col[i] * (Settings.pwm_range / 255);
-//              snprintf_P(log_data, sizeof(log_data), PSTR(D_LOG_APPLICATION "Cur_Col%d %d, CurCol %d"), i, cur_col[i], curcol);
-//              AddLog(LOG_LEVEL_DEBUG);
-              analogWrite(pin[GPIO_PWM1 +i], bitRead(pwm_inverted, i) ? Settings.pwm_range - curcol : curcol);
+              cur_col[i] = 0xFC;   // Fix unwanted blinking and PWM watchdog errors for values close to pwm_range (H801, Arilux and BN-SZ01)
             }
+            uint16_t curcol = cur_col[i] * (Settings.pwm_range / 255);
+//            snprintf_P(log_data, sizeof(log_data), PSTR(D_LOG_APPLICATION "Cur_Col%d %d, CurCol %d"), i, cur_col[i], curcol);
+//            AddLog(LOG_LEVEL_DEBUG);
+            analogWrite(pin[GPIO_PWM1 +i], bitRead(pwm_inverted, i) ? Settings.pwm_range - curcol : curcol);
           }
         }
       }
@@ -1087,32 +1083,45 @@ boolean LightCommand()
     snprintf_P(mqtt_data, sizeof(mqtt_data), S_JSON_COMMAND_INDEX_NVALUE, command, XdrvMailbox.index, round(light_current_color[XdrvMailbox.index -1] / 2.55));
   }
   else if ((CMND_HSBCOLOR == command_code) && ( light_subtype >= LST_RGB)) {
-    //  Implement method to "direct set" color by HSB (HSB is passed comma separated, 0<H<360 0<S<100 0<B<100 )
-    uint16_t HSB[3];
-    bool validHSB = true;
-
-    for (int i = 0; i < 3; i++) {
-      char *substr;
-
-      if (0 == i) {
-        substr = strtok(XdrvMailbox.data, ",");
-      } else {
-        substr = strtok(NULL, ",");
-      }
-      if (substr != NULL) {
-        HSB[i] = atoi(substr);
-      } else {
-        validHSB = false;
-      }
-    }
+    bool validHSB = (XdrvMailbox.data_len > 0);
     if (validHSB) {
-      //  Translate to fractional elements as required by LightHsbToRgb
-      //  Keep the results <=1 in the event someone passes something
-      //  out of range.
-      LightSetHsb(( (HSB[0]>360) ? (HSB[0] % 360) : HSB[0] ) /360.0,
-                  ( (HSB[1]>100) ? (HSB[1] % 100) : HSB[1] ) /100.0,
-                  ( (HSB[2]>100) ? (HSB[2] % 100) : HSB[2] ) /100.0,
-                  0);
+      uint16_t HSB[3];
+      if (strstr(XdrvMailbox.data, ",")) {  // Command with 3 comma separated parameters, Hue (0<H<360), Saturation (0<S<100) AND Brightness (0<B<100)
+        for (int i = 0; i < 3; i++) {
+          char *substr;
+
+          if (0 == i) {
+            substr = strtok(XdrvMailbox.data, ",");
+          } else {
+            substr = strtok(NULL, ",");
+          }
+          if (substr != NULL) {
+            HSB[i] = atoi(substr);
+          } else {
+            validHSB = false;
+          }
+        }
+      } else {  // Command with only 1 parameter, Hue (0<H<360), Saturation (0<S<100) OR Brightness (0<B<100)
+        float hsb[3];
+
+        LightGetHsb(&hsb[0],&hsb[1],&hsb[2]);
+        HSB[0] = round(hsb[0] * 360);
+        HSB[1] = round(hsb[1] * 100);
+        HSB[2] = round(hsb[2] * 100);
+        if ((XdrvMailbox.index > 0) && (XdrvMailbox.index < 4)) {
+          HSB[XdrvMailbox.index -1] = XdrvMailbox.payload;
+        } else {
+          validHSB = false;
+        }
+      }
+      if (validHSB) {
+        //  Translate to fractional elements as required by LightHsbToRgb
+        //  Keep the results <=1 in the event someone passes something out of range.
+        LightSetHsb(( (HSB[0]>360) ? (HSB[0] % 360) : HSB[0] ) /360.0,
+                    ( (HSB[1]>100) ? (HSB[1] % 100) : HSB[1] ) /100.0,
+                    ( (HSB[2]>100) ? (HSB[2] % 100) : HSB[2] ) /100.0,
+                    0);
+      }
     } else {
       LightState(0);
     }
@@ -1132,6 +1141,7 @@ boolean LightCommand()
           break;
         }
       }
+
       Ws2812ForceUpdate();
     }
     snprintf_P(mqtt_data, sizeof(mqtt_data), S_JSON_COMMAND_INDEX_SVALUE, command, XdrvMailbox.index, Ws2812GetColor(XdrvMailbox.index, scolor));

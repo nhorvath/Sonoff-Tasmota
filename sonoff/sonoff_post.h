@@ -54,11 +54,11 @@ void KNX_CB_Action(message_t const &msg, void *arg);
 #define USE_ENERGY_SENSOR                     // Use energy sensors
 
 /*********************************************************************************************\
- * [sonoff-allsensors.bin]
- * Provide an image with all supported sensors enabled
+ * [sonoff-sensors.bin]
+ * Provide an image with useful supported sensors enabled
 \*********************************************************************************************/
 
-#ifdef USE_ALL_SENSORS
+#ifdef USE_SENSORS
 
 #define USE_ADC_VCC                           // Display Vcc in Power status. Disable for use as Analog input on selected devices
 #define USE_DS18x20                           // For more than one DS18x20 sensors with id sort, single scan and read retry (+1k3 code)
@@ -80,6 +80,7 @@ void KNX_CB_Action(message_t const &msg, void *arg);
 #define USE_INA219                            // Add I2C code for INA219 Low voltage and current sensor (+1k code)
 #define USE_MGS                               // Add I2C code for Xadow and Grove Mutichannel Gas sensor using library Multichannel_Gas_Sensor (+10k code)
 //#define USE_APDS9960                          // Add I2C code for APDS9960 Proximity Sensor. Disables SHT and VEML6070 (+4k7 code)
+//#define USE_CCS811                            // Add I2C code for CCS811 sensor (+2k2 code)
 #define USE_MHZ19                             // Add support for MH-Z19 CO2 sensor (+2k code)
 #define USE_SENSEAIR                          // Add support for SenseAir K30, K70 and S8 CO2 sensor (+2k3 code)
 #ifndef CO2_LOW
@@ -104,7 +105,7 @@ void KNX_CB_Action(message_t const &msg, void *arg);
 //  #define USE_WS2812_DMA                      // DMA supports only GPIO03 (= Serial RXD) (+1k mem). When USE_WS2812_DMA is enabled expect Exceptions on Pow
 #define USE_ARILUX_RF                         // Add support for Arilux RF remote controller (+0k8 code, 252 iram (non 2.3.0))
 #define USE_SR04                              // Add support for HC-SR04 ultrasonic devices (+1k code)
-#endif  // USE_ALL_SENSORS
+#endif  // USE_SENSORS
 
 /*********************************************************************************************\
  * [sonoff-classic.bin]
@@ -113,21 +114,32 @@ void KNX_CB_Action(message_t const &msg, void *arg);
 
 #ifdef USE_CLASSIC
 
+#ifndef USE_WPS
+#define USE_WPS                               // Add support for WPS as initial wifi configuration tool (+33k code, 1k mem (5k mem with core v2.4.2+))
+#endif
+#ifndef USE_SMARTCONFIG
+#define USE_SMARTCONFIG                       // Add support for Wifi SmartConfig as initial wifi configuration tool (+23k code, +0.6k mem)
+#endif
+#undef MQTT_LIBRARY_TYPE
+#define MQTT_LIBRARY_TYPE      MQTT_PUBSUBCLIENT   // Use PubSubClient library
+#undef USE_ARDUINO_OTA                        // Disable support for Arduino OTA
 #undef USE_KNX                                // Disable KNX IP Protocol Support
 #undef USE_TIMERS                             // Disable support for up to 16 timers
 #undef USE_TIMERS_WEB                         // Disable support for timer webpage
 #undef USE_SUNRISE                            // Disable support for Sunrise and sunset tools
 #undef USE_RULES                              // Disable support for rules
-#undef USE_LM75AD                             // Disable sensor
-#undef USE_BME680                             // Disable sensor
-#undef USE_SGP30                              // Disable sensor
+#undef USE_I2C                                // Disable all I2C sensors
+#undef USE_SPI                                // Disable all SPI devices
+#undef USE_MHZ19                              // Disable support for MH-Z19 CO2 sensor
 #undef USE_SENSEAIR                           // Disable support for SenseAir K30, K70 and S8 CO2 sensor
+#undef USE_PMS5003                            // Disable support for PMS5003 and PMS7003 particle concentration sensor
 #undef USE_NOVA_SDS                           // Disable support for SDS011 and SDS021 particle concentration sensor
 #undef USE_PZEM004T                           // Disable PZEM004T energy sensor
-#undef USE_IR_RECEIVE                         // Disable support for IR receiver
 #undef USE_SERIAL_BRIDGE                      // Disable support for software Serial Bridge
 #undef USE_SDM120                             // Disable support for Eastron SDM120-Modbus energy meter
 #undef USE_SDM630                             // Disable support for Eastron SDM630-Modbus energy meter
+#undef USE_IR_REMOTE                          // Disable IR remote commands using library IRremoteESP8266 and ArduinoJson
+#undef USE_IR_RECEIVE                         // Disable support for IR receiver
 #undef USE_ARILUX_RF                          // Disable support for Arilux RF remote controller
 #undef USE_SR04                               // Disable support for for HC-SR04 ultrasonic devices
 #undef USE_TM1638                             // Disable support for TM1638 switches copying Switch1 .. Switch8
@@ -167,6 +179,8 @@ void KNX_CB_Action(message_t const &msg, void *arg);
 
 #undef USE_ENERGY_SENSOR                      // Disable energy sensors
 #undef USE_ARDUINO_OTA                        // Disable support for Arduino OTA
+#undef USE_WPS                                // Disable support for WPS as initial wifi configuration tool
+#undef USE_SMARTCONFIG                        // Disable support for Wifi SmartConfig as initial wifi configuration tool
 #undef USE_DOMOTICZ                           // Disable Domoticz
 #undef USE_HOME_ASSISTANT                     // Disable Home Assistant
 #undef USE_MQTT_TLS                           // Disable TLS support won't work as the MQTTHost is not set
@@ -206,6 +220,10 @@ void KNX_CB_Action(message_t const &msg, void *arg);
 /*********************************************************************************************\
  * Mandatory defines satisfying possible disabled defines
 \*********************************************************************************************/
+
+#ifndef USE_WPS                               // See https://github.com/esp8266/Arduino/pull/4889
+#undef NO_EXTRA_4K_HEAP                       // Allocate 4k heap for WPS in ESP8166/Arduino core v2.4.2 (was always allocated in previous versions)
+#endif
 
 #ifndef SWITCH_MODE
 #define SWITCH_MODE            TOGGLE         // TOGGLE, FOLLOW or FOLLOW_INV (the wall switch state)

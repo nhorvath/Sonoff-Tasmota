@@ -206,6 +206,7 @@
 #define D_ERASED_SECTOR "gelöschter Sektor"
 
 // xdrv_02_webserver.ino
+#define D_NOSCRIPT "JavaScript aktivieren um Tasmota benutzen zu können"
 #define D_MINIMAL_FIRMWARE_PLEASE_UPGRADE "MINIMUM-Firmware - bitte upgraden"
 #define D_WEBSERVER_ACTIVE_ON "Web-Server aktiv bei"
 #define D_WITH_IP_ADDRESS "mit IP-Adresse"
@@ -379,6 +380,7 @@
 // xdrv_09_timers.ino
 #define D_CONFIGURE_TIMER "Zeitplan konfigurieren"
 #define D_TIMER_PARAMETERS "Zeitplan-Einstellungen"
+#define D_TIMER_ENABLE "Zeitpläne aktivieren"
 #define D_TIMER_ARM "Aktiv"
 #define D_TIMER_TIME "Uhrzeit"
 #define D_TIMER_DAYS "Wochentage"
@@ -435,6 +437,14 @@
 #define D_ENVIRONMENTAL_CONCENTRATION "PM"     // Environmetal Particle Matter
 #define D_PARTICALS_BEYOND "Particals"
 
+// xsns_32_mpu6050.ino
+#define D_AX_AXIS "Beschl. X-Achse"
+#define D_AY_AXIS "Beschl. Y-Achse"
+#define D_AZ_AXIS "Beschl. Z-Achse"
+#define D_GX_AXIS "Gyroskop X-Achse"
+#define D_GY_AXIS "Gyroskop Y-Achse"
+#define D_GZ_AXIS "Gyroskop Z-Achse"
+
 // sonoff_template.h
 #define D_SENSOR_NONE     "None"
 #define D_SENSOR_DHT11    "DHT11"
@@ -483,8 +493,8 @@
 #define D_UNIT_KILOOHM "kOhm"
 #define D_UNIT_KILOWATTHOUR "kWh"
 #define D_UNIT_LUX "lx"
-#define D_UNIT_MICROGRAM_PER_CUBIC_METER "ug/m3"
-#define D_UNIT_MICROMETER "um"
+#define D_UNIT_MICROGRAM_PER_CUBIC_METER "µg/m3"
+#define D_UNIT_MICROMETER "µm"
 #define D_UNIT_MICROSECOND "µs"
 #define D_UNIT_MILLIAMPERE "mA"
 #define D_UNIT_MILLISECOND "ms"
@@ -493,7 +503,7 @@
 #define D_UNIT_PARTS_PER_DECILITER "ppd"
 #define D_UNIT_PARTS_PER_MILLION "ppm"
 #define D_UNIT_PRESSURE "hPa"
-#define D_UNIT_SECOND "sek"
+#define D_UNIT_SECOND "s"
 #define D_UNIT_SECTORS "Sektoren"
 #define D_UNIT_VA "VA"
 #define D_UNIT_VAR "VAr"

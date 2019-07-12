@@ -1,7 +1,7 @@
 /*
   xnrg_03_pzem004t.ino - PZEM004T energy sensor support for Sonoff-Tasmota
 
-  Copyright (C) 2018  Theo Arends
+  Copyright (C) 2019  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -32,7 +32,7 @@
 
 #include <TasmotaSerial.h>
 
-TasmotaSerial *PzemSerial;
+TasmotaSerial *PzemSerial = nullptr;
 
 #define PZEM_VOLTAGE (uint8_t)0xB0
 #define RESP_VOLTAGE (uint8_t)0xA0
@@ -68,7 +68,7 @@ IPAddress pzem_ip(192, 168, 1, 1);
 uint8_t PzemCrc(uint8_t *data)
 {
   uint16_t crc = 0;
-  for (uint8_t i = 0; i < sizeof(PZEMCommand) -1; i++) crc += *data++;
+  for (uint32_t i = 0; i < sizeof(PZEMCommand) -1; i++) crc += *data++;
   return (uint8_t)(crc & 0xFF);
 }
 
@@ -77,7 +77,7 @@ void PzemSend(uint8_t cmd)
   PZEMCommand pzem;
 
   pzem.command = cmd;
-  for (uint8_t i = 0; i < sizeof(pzem.addr); i++) pzem.addr[i] = pzem_ip[i];
+  for (uint32_t i = 0; i < sizeof(pzem.addr); i++) pzem.addr[i] = pzem_ip[i];
   pzem.data = 0;
 
   uint8_t *bytes = (uint8_t*)&pzem;
@@ -122,7 +122,7 @@ bool PzemRecieve(uint8_t resp, float *data)
     }
   }
 
-  AddLogSerial(LOG_LEVEL_DEBUG_MORE, buffer, len);
+  AddLogBuffer(LOG_LEVEL_DEBUG_MORE, buffer, len);
 
   if (len != sizeof(PZEMCommand)) {
 //    AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "Pzem comms timeout"));
@@ -169,6 +169,7 @@ void PzemEvery200ms(void)
   if (data_ready) {
     float value = 0;
     if (PzemRecieve(pzem_responses[pzem_read_state], &value)) {
+      energy_data_valid = 0;
       switch (pzem_read_state) {
         case 1:  // Voltage as 230.2V
           energy_voltage = value;
@@ -226,7 +227,7 @@ void PzemDrvInit(void)
  * Interface
 \*********************************************************************************************/
 
-int Xnrg03(byte function)
+int Xnrg03(uint8_t function)
 {
   int result = 0;
 
@@ -239,7 +240,7 @@ int Xnrg03(byte function)
         PzemSnsInit();
         break;
       case FUNC_EVERY_200_MSECOND:
-        PzemEvery200ms();
+        if (PzemSerial) { PzemEvery200ms(); }
         break;
     }
   }

@@ -19,10 +19,10 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-// Use PWM from core 2.4.0 as all other version produce flicker when settings are saved to flash. Still true for 2.5.0
-//#include <core_version.h>
-//#if defined(ARDUINO_ESP8266_RELEASE_2_3_0) || defined(ARDUINO_ESP8266_RELEASE_2_4_0) || defined(ARDUINO_ESP8266_RELEASE_2_4_1) || defined(ARDUINO_ESP8266_RELEASE_2_4_2)
-//#warning **** Tasmota is using v2.4.0 wiring_pwm.c as planned ****
+// Use PWM from core 2.4.0 as all versions below 2.5.0-beta3 produce LED flickering when settings are saved to flash
+#include <core_version.h>
+#if defined(ARDUINO_ESP8266_RELEASE_2_3_0) || defined(ARDUINO_ESP8266_RELEASE_2_4_0) || defined(ARDUINO_ESP8266_RELEASE_2_4_1) || defined(ARDUINO_ESP8266_RELEASE_2_4_2)
+#warning **** Tasmota is using v2.4.0 wiring_pwm.c as planned ****
 
 #include "wiring_private.h"
 #include "pins_arduino.h"
@@ -191,6 +191,11 @@ extern void __analogWrite(uint8_t pin, int value)
         prep_pwm_steps();
         return;
     }
+    if(value == pwm_range) {
+        digitalWrite(pin, HIGH);
+        prep_pwm_steps();
+        return;
+    }
     if((pwm_mask & (1 << pin)) == 0) {
         if(pwm_mask == 0) {
             memset(&_pwm_isr_data, 0, sizeof(_pwm_isr_data));
@@ -226,4 +231,4 @@ extern void analogWrite(uint8_t pin, int val) __attribute__ ((weak, alias("__ana
 extern void analogWriteFreq(uint32_t freq) __attribute__ ((weak, alias("__analogWriteFreq")));
 extern void analogWriteRange(uint32_t range) __attribute__ ((weak, alias("__analogWriteRange")));
 
-//#endif  // ARDUINO_ESP8266_RELEASE
+#endif  // ARDUINO_ESP8266_RELEASE

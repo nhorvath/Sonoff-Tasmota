@@ -1,7 +1,7 @@
 /*
   support_features.ino - feature support for Sonoff-Tasmota
 
-  Copyright (C) 2018  Theo Arends
+  Copyright (C) 2019  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -23,11 +23,13 @@
 
 void GetFeatures(void)
 {
-  feature_drv1 = 0x00000000;   // xdrv_01_mqtt.ino, xdrv_01_light.ino, xdrv_04_snfbridge.ino
+  feature_drv1 = 0x00000000;   // xdrv_02_mqtt.ino, xdrv_04_light.ino, xdrv_06_snfbridge.ino
 
 //  feature_drv1 |= 0x00000001;
-//  feature_drv1 |= 0x00000002;
 
+#ifdef USE_LIGHT
+  feature_drv1 |= 0x00000002;  // sonoff.ino, xdrv_04_light.ino
+#endif
 #ifdef USE_I2C
   feature_drv1 |= 0x00000004;  // sonoff.ino
 #endif
@@ -41,33 +43,33 @@ void GetFeatures(void)
   feature_drv1 |= 0x00000020;  // sonoff.ino
 #endif
 #ifdef USE_MQTT_TLS
-  feature_drv1 |= 0x00000040;  // sonoff.ino
+  feature_drv1 |= 0x00000040;  // xdrv_02_mqtt.ino
 #endif
 #ifdef USE_WEBSERVER
-  feature_drv1 |= 0x00000080;  // xdrv_02_webserver.ino
+  feature_drv1 |= 0x00000080;  // xdrv_01_webserver.ino
 #endif
 #ifdef WEBSERVER_ADVERTISE
-  feature_drv1 |= 0x00000100;  // xdrv_02_webserver.ino
+  feature_drv1 |= 0x00000100;  // xdrv_01_webserver.ino
 #endif
-#ifdef USE_EMULATION
-  feature_drv1 |= 0x00000200;  // xplg_wemohue.ino
+#ifdef USE_EMULATION_HUE
+  feature_drv1 |= 0x00000200;  // xdrv_20_hue.ino
 #endif
 #if (MQTT_LIBRARY_TYPE == MQTT_PUBSUBCLIENT)
-  feature_drv1 |= 0x00000400;  // xdrv_01_mqtt.ino
+  feature_drv1 |= 0x00000400;  // xdrv_02_mqtt.ino
 #endif
 #if (MQTT_LIBRARY_TYPE == MQTT_TASMOTAMQTT)
-  feature_drv1 |= 0x00000800;  // xdrv_01_mqtt.ino
+//  feature_drv1 |= 0x00000800;  // xdrv_02_mqtt.ino
 #endif
 #if (MQTT_LIBRARY_TYPE == MQTT_ESPMQTTARDUINO)      // Obsolete since 6.2.1.11
-  feature_drv1 |= 0x00001000;  // xdrv_01_mqtt.ino
+//  feature_drv1 |= 0x00001000;  // xdrv_02_mqtt.ino
 #endif
 #ifdef MQTT_HOST_DISCOVERY
-  feature_drv1 |= 0x00002000;  // xdrv_01_mqtt.ino
+  feature_drv1 |= 0x00002000;  // xdrv_02_mqtt.ino
 #endif
 #ifdef USE_ARILUX_RF
   feature_drv1 |= 0x00004000;  // xdrv_04_light.ino
 #endif
-#ifdef USE_WS2812
+#if defined(USE_LIGHT) && defined(USE_WS2812)
   feature_drv1 |= 0x00008000;  // xdrv_04_light.ino
 #endif
 #ifdef USE_WS2812_DMA
@@ -116,7 +118,7 @@ void GetFeatures(void)
   feature_drv1 |= 0x40000000;  // support.ino
 #endif
 #if (MQTT_LIBRARY_TYPE == MQTT_ARDUINOMQTT)
-  feature_drv1 |= 0x80000000;  // xdrv_01_mqtt.ino
+//  feature_drv1 |= 0x80000000;  // xdrv_02_mqtt.ino
 #endif
 
 /*********************************************************************************************/
@@ -126,16 +128,16 @@ void GetFeatures(void)
 #ifdef USE_CONFIG_OVERRIDE
   feature_drv2 |= 0x00000001;  // user_config(_override).h
 #endif
-#ifdef BE_MINIMAL
+#ifdef FIRMWARE_MINIMAL
   feature_drv2 |= 0x00000002;  // user_config(_override).h
 #endif
-#ifdef USE_SENSORS
+#ifdef FIRMWARE_SENSORS
   feature_drv2 |= 0x00000004;  // user_config(_override).h
 #endif
-#ifdef USE_CLASSIC
+#ifdef FIRMWARE_CLASSIC
   feature_drv2 |= 0x00000008;  // user_config(_override).h
 #endif
-#ifdef USE_KNX_NO_EMULATION
+#ifdef FIRMWARE_KNX_NO_EMULATION
   feature_drv2 |= 0x00000010;  // user_config(_override).h
 #endif
 #ifdef USE_DISPLAY_MODES1TO5
@@ -168,19 +170,25 @@ void GetFeatures(void)
 #ifdef USE_PCA9685
   feature_drv2 |= 0x00004000;  // xdrv_15_pca9685.ino
 #endif
-#ifdef USE_TUYA_DIMMER
+#if defined(USE_LIGHT) && defined(USE_TUYA_DIMMER)
   feature_drv2 |= 0x00008000;  // xdrv_16_tuyadimmer.ino
 #endif
 #ifdef USE_RC_SWITCH
   feature_drv2 |= 0x00010000;  // xdrv_17_rcswitch.ino
 #endif
-#ifdef USE_ARMTRONIX_DIMMERS
+#if defined(USE_LIGHT) && defined(USE_ARMTRONIX_DIMMERS)
   feature_drv2 |= 0x00020000;  // xdrv_18_armtronixdimmer.ino
 #endif
+#if defined(USE_LIGHT) && defined(USE_SM16716)
+  feature_drv2 |= 0x00040000;  // xdrv_04_light.ino
+#endif
+#ifdef USE_SCRIPT
+  feature_drv2 |= 0x00080000;  // xdrv_10_scripter.ino
+#endif
+#ifdef USE_EMULATION_WEMO
+  feature_drv2 |= 0x00100000;  // xdrv_21_wemo.ino
+#endif
 
-//  feature_drv2 |= 0x00040000;
-//  feature_drv2 |= 0x00080000;
-//  feature_drv2 |= 0x00100000;
 //  feature_drv2 |= 0x00200000;
 //  feature_drv2 |= 0x00400000;
 
@@ -216,10 +224,11 @@ void GetFeatures(void)
 
   feature_sns1 = 0x00000000;   // xsns_01_counter.ino, xsns_04_snfsc.ino
 
-//  feature_sns1 |= 0x00000001;
-
+#ifdef USE_COUNTER
+  feature_sns1 |= 0x00000001;  // xsns_01_counter.ino
+#endif
 #ifdef USE_ADC_VCC
-  feature_sns1 |= 0x00000002;  // support.ino (ADC)
+  feature_sns1 |= 0x00000002;  // xsns_02_analog.ino
 #endif
 #ifdef USE_ENERGY_SENSOR
   feature_sns1 |= 0x00000004;  // xdrv_03_energy.ino
@@ -365,20 +374,32 @@ void GetFeatures(void)
   feature_sns2 |= 0x00008000;  // xsns_37_rfsensor.ino
 #endif
 #ifdef USE_THEO_V2
-  feature_sns2 |= 0x00010000;
+  feature_sns2 |= 0x00010000;  // xsns_37_rfsensor.ino
 #endif
 #ifdef USE_ALECTO_V2
-  feature_sns2 |= 0x00020000;
+  feature_sns2 |= 0x00020000;  // xsns_37_rfsensor.ino
 #endif
 #ifdef USE_AZ7798
-  feature_sns2 |= 0x00040000;
+  feature_sns2 |= 0x00040000;  // xsns_38_az7798.ino
 #endif
-//  feature_sns2 |= 0x00080000;
-//  feature_sns2 |= 0x00100000;
-//  feature_sns2 |= 0x00200000;
-//  feature_sns2 |= 0x00400000;
-//  feature_sns2 |= 0x00800000;
-//  feature_sns2 |= 0x01000000;
+#ifdef USE_MAX31855
+  feature_sns2 |= 0x00080000;  // xsns_39_max31855.ino
+#endif
+#ifdef USE_PN532_HSU
+  feature_sns2 |= 0x00100000;  // xsns_40_pn532.ino
+#endif
+#ifdef USE_MAX44009
+  feature_sns2 |= 0x00200000;  // xsns_41_max44009.ino
+#endif
+#ifdef USE_SCD30
+  feature_sns2 |= 0x00400000;  // xsns_42_scd30.ino
+#endif
+#ifdef USE_HRE
+  feature_sns2 |= 0x00800000;  // xsns_43_hre.ino
+#endif
+#ifdef USE_ADE7953
+  feature_sns2 |= 0x01000000;  // xnrg_07_ade7953.ino
+#endif
 //  feature_sns2 |= 0x02000000;
 //  feature_sns2 |= 0x04000000;
 //  feature_sns2 |= 0x08000000;

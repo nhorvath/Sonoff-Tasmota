@@ -1,7 +1,7 @@
 /*
   xdrv_18_armtronix_dimmers.ino - Armtronix dimmers support for Sonoff-Tasmota
 
-  Copyright (C) 2018  wvdv2002 and Theo Arends
+  Copyright (C) 2019  wvdv2002 and Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -17,6 +17,7 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#ifdef USE_LIGHT
 #ifdef USE_ARMTRONIX_DIMMERS
 /*********************************************************************************************\
  * This code can be used for Armtronix dimmers.
@@ -31,7 +32,7 @@
 
 TasmotaSerial *ArmtronixSerial = nullptr;
 
-boolean armtronix_ignore_dim = false;            // Flag to skip serial send to prevent looping when processing inbound states from the faceplate interaction
+bool armtronix_ignore_dim = false;            // Flag to skip serial send to prevent looping when processing inbound states from the faceplate interaction
 int8_t armtronix_wifi_state = -2;                // Keep MCU wifi-status in sync with WifiState()
 int8_t armtronix_dimState[2];                    // Dimmer state values.
 int8_t armtronix_knobState[2];                   // Dimmer state values.
@@ -40,7 +41,7 @@ int8_t armtronix_knobState[2];                   // Dimmer state values.
  * Internal Functions
 \*********************************************************************************************/
 
-boolean ArmtronixSetChannels(void)
+bool ArmtronixSetChannels(void)
 {
   LightSerial2Duty(((uint8_t*)XdrvMailbox.data)[0], ((uint8_t*)XdrvMailbox.data)[1]);
   return true;
@@ -58,13 +59,11 @@ void LightSerial2Duty(uint8_t duty1, uint8_t duty2)
     ArmtronixSerial->print("\nDimmer2:");
     ArmtronixSerial->println(duty2);
 
-    snprintf_P(log_data, sizeof(log_data), PSTR( "ARM: Send Serial Packet Dim Values=%d,%d"), armtronix_dimState[0],armtronix_dimState[1]);
-    AddLog(LOG_LEVEL_DEBUG);
+    AddLog_P2(LOG_LEVEL_DEBUG, PSTR("ARM: Send Serial Packet Dim Values=%d,%d"), armtronix_dimState[0],armtronix_dimState[1]);
 
   } else {
     armtronix_ignore_dim = false;
-    snprintf_P(log_data, sizeof(log_data), PSTR( "ARM: Send Dim Level skipped due to already set. Value=%d,%d"), armtronix_dimState[0],armtronix_dimState[1]);
-    AddLog(LOG_LEVEL_DEBUG);
+    AddLog_P2(LOG_LEVEL_DEBUG, PSTR("ARM: Send Dim Level skipped due to already set. Value=%d,%d"), armtronix_dimState[0],armtronix_dimState[1]);
 
   }
 }
@@ -73,8 +72,7 @@ void ArmtronixRequestState(void)
 {
   if (ArmtronixSerial) {
     // Get current status of MCU
-    snprintf_P(log_data, sizeof(log_data), "TYA: Request MCU state");
-    AddLog(LOG_LEVEL_DEBUG);
+    AddLog_P(LOG_LEVEL_DEBUG, PSTR("ARM: Request MCU state"));
     ArmtronixSerial->println("Status");
 
   }
@@ -84,7 +82,7 @@ void ArmtronixRequestState(void)
  * API Functions
 \*********************************************************************************************/
 
-boolean ArmtronixModuleSelected(void)
+bool ArmtronixModuleSelected(void)
 {
   light_type = LT_SERIAL2;
   return true;
@@ -115,7 +113,7 @@ void ArmtronixSerialInput(void)
     answer = ArmtronixSerial->readStringUntil('\n');
     if (answer.substring(0,7) == "Status:") {
       commaIndex = 6;
-      for (int i =0; i<2; i++) {
+      for (uint32_t i =0; i<2; i++) {
         newDimState[i] = answer.substring(commaIndex+1,answer.indexOf(',',commaIndex+1)).toInt();
         if (newDimState[i] != armtronix_dimState[i]) {
           temp = ((float)newDimState[i])*1.01010101010101; //max 255
@@ -123,8 +121,7 @@ void ArmtronixSerialInput(void)
           armtronix_ignore_dim = true;
           snprintf_P(scmnd, sizeof(scmnd), PSTR(D_CMND_CHANNEL "%d %d"),i+1, temp);
           ExecuteCommand(scmnd,SRC_SWITCH);
-          snprintf_P(log_data, sizeof(log_data), PSTR("ARM: Send CMND_CHANNEL=%s"), scmnd );
-          AddLog(LOG_LEVEL_DEBUG);
+          AddLog_P2(LOG_LEVEL_DEBUG, PSTR("ARM: Send CMND_CHANNEL=%s"), scmnd );
         }
         commaIndex = answer.indexOf(',',commaIndex+1);
       }
@@ -152,14 +149,13 @@ void ArmtronixSetWifiLed(void)
       break;
   }
 
-  snprintf_P(log_data, sizeof(log_data), "ARM: Set WiFi LED to state %d (%d)", wifi_state, WifiState());
-  AddLog(LOG_LEVEL_DEBUG);
+  AddLog_P2(LOG_LEVEL_DEBUG, PSTR("ARM: Set WiFi LED to state %d (%d)"), wifi_state, WifiState());
 
-  char state = '0' + (wifi_state & 1 > 0);
+  char state = '0' + ((wifi_state & 1) > 0);
   ArmtronixSerial->print("Setled:");
   ArmtronixSerial->write(state);
   ArmtronixSerial->write(',');
-  state = '0' + (wifi_state & 2 > 0);
+  state = '0' + ((wifi_state & 2) > 0);
   ArmtronixSerial->write(state);
   ArmtronixSerial->write(10);
   armtronix_wifi_state = WifiState();
@@ -169,20 +165,20 @@ void ArmtronixSetWifiLed(void)
  * Interface
 \*********************************************************************************************/
 
-boolean Xdrv18(byte function)
+bool Xdrv18(uint8_t function)
 {
-  boolean result = false;
+  bool result = false;
 
-  if (ARMTRONIX_DIMMERS == Settings.module) {
+  if (ARMTRONIX_DIMMERS == my_module_type) {
     switch (function) {
+      case FUNC_LOOP:
+        if (ArmtronixSerial) { ArmtronixSerialInput(); }
+        break;
       case FUNC_MODULE_INIT:
         result = ArmtronixModuleSelected();
         break;
       case FUNC_INIT:
         ArmtronixInit();
-        break;
-      case FUNC_LOOP:
-        if (ArmtronixSerial) { ArmtronixSerialInput(); }
         break;
       case FUNC_EVERY_SECOND:
         if (ArmtronixSerial) {
@@ -201,3 +197,4 @@ boolean Xdrv18(byte function)
 }
 
 #endif  // USE_ARMTRONIX_DIMMERS
+#endif  // USE_LIGHT

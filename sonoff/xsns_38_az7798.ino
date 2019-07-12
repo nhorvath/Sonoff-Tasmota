@@ -1,7 +1,7 @@
 /*
   xsns_38_az7798.ino - AZ_Instrument 7798 CO2/temperature/humidity meter support for Sonoff-Tasmota
 
-  Copyright (C) 2018  Theo Arends
+  Copyright (C) 2019  Theo Arends
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -107,9 +107,7 @@
  *
  * :  responds with : T19.9C:C2167ppm:H57.4%
  *    This one gives the current readings.
- **********************************************************************************************
-
-/*********************************************************************************************/
+\*********************************************************************************************/
 
 #include <TasmotaSerial.h>
 
@@ -160,7 +158,7 @@ void AzEverySecond(void)
       }
     } while(((millis() - start) < AZ_READ_TIMEOUT) && (counter < sizeof(az_response)) && !az_received);
 
-    AddLogSerial(LOG_LEVEL_DEBUG_MORE, az_response, counter);
+    AddLogBuffer(LOG_LEVEL_DEBUG_MORE, az_response, counter);
 
     if (!az_received) {
       AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "AZ7798 comms timeout"));
@@ -184,7 +182,7 @@ void AzEverySecond(void)
       return;
     }
     response_substr[j] = 0;                 // add null terminator
-    az_temperature = CharToDouble((char*)response_substr); // units (C or F) depends on meter setting
+    az_temperature = CharToFloat((char*)response_substr); // units (C or F) depends on meter setting
     if(az_response[i] == 'C') {             // meter transmits in degC
       az_temperature = ConvertTemp((float)az_temperature); // convert to degF, depending on settings
     } else {                                // meter transmits in degF
@@ -234,7 +232,7 @@ void AzEverySecond(void)
       return;
     }
     response_substr[j] = 0;                 // add null terminator
-    az_humidity = CharToDouble((char*)response_substr);
+    az_humidity = ConvertHumidity(CharToFloat((char*)response_substr));
   }
 }
 
@@ -252,7 +250,7 @@ void AzInit(void)
   }
 }
 
-void AzShow(boolean json)
+void AzShow(bool json)
 {
   char temperature[33];
   dtostrfd(az_temperature, Settings.flag2.temperature_resolution, temperature);
@@ -260,15 +258,15 @@ void AzShow(boolean json)
   dtostrfd(az_humidity, Settings.flag2.humidity_resolution, humidity);
 
   if (json) {
-    snprintf_P(mqtt_data, sizeof(mqtt_data), PSTR("%s,\"%s\":{\"" D_JSON_CO2 "\":%d,\"" D_JSON_TEMPERATURE "\":%s,\"" D_JSON_HUMIDITY "\":%s}"), mqtt_data, ktype, az_co2, temperature, humidity);
+    ResponseAppend_P(PSTR(",\"%s\":{\"" D_JSON_CO2 "\":%d,\"" D_JSON_TEMPERATURE "\":%s,\"" D_JSON_HUMIDITY "\":%s}"), ktype, az_co2, temperature, humidity);
 #ifdef USE_DOMOTICZ
     if (0 == tele_period) DomoticzSensor(DZ_AIRQUALITY, az_co2);
 #endif  // USE_DOMOTICZ
 #ifdef USE_WEBSERVER
   } else {
-    snprintf_P(mqtt_data, sizeof(mqtt_data), HTTP_SNS_CO2, mqtt_data, ktype, az_co2);
-    snprintf_P(mqtt_data, sizeof(mqtt_data), HTTP_SNS_TEMP, mqtt_data, ktype, temperature, TempUnit());
-    snprintf_P(mqtt_data, sizeof(mqtt_data), HTTP_SNS_HUM, mqtt_data, ktype, humidity);
+    WSContentSend_PD(HTTP_SNS_CO2, ktype, az_co2);
+    WSContentSend_PD(HTTP_SNS_TEMP, ktype, temperature, TempUnit());
+    WSContentSend_PD(HTTP_SNS_HUM, ktype, humidity);
 #endif  // USE_WEBSERVER
   }
 }
@@ -277,9 +275,9 @@ void AzShow(boolean json)
  * Interface
 \*********************************************************************************************/
 
-boolean Xsns38(byte function)
+bool Xsns38(uint8_t function)
 {
-  boolean result = false;
+  bool result = false;
 
   if(az_type){
     switch (function) {
@@ -293,7 +291,7 @@ boolean Xsns38(byte function)
         AzShow(1);
         break;
 #ifdef USE_WEBSERVER
-      case FUNC_WEB_APPEND:
+      case FUNC_WEB_SENSOR:
         AzShow(0);
         break;
 #endif  // USE_WEBSERVER

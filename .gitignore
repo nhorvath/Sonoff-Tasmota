@@ -7,10 +7,12 @@
 .piolibdeps
 .clang_complete
 .gcc-flags.json
+.cache
 sonoff/user_config_override.h
 build
 build.sh
 firmware.map
+firmware.asm
 archive/
 *.bin
 

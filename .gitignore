@@ -8,11 +8,14 @@
 .clang_complete
 .gcc-flags.json
 .cache
-sonoff/user_config_override.h
+tasmota/user_config_override.h
 build
 build.sh
 firmware.map
 firmware.asm
+tasmota*.bin
+tasmota*.map
+platformio_override.ini
 archive/
 *.bin
 

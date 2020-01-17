@@ -371,7 +371,7 @@
 //  #define W1_PARASITE_POWER                      // Optimize for parasite powered sensors
 
 // -- I2C sensors ---------------------------------
-#define USE_I2C                                  // I2C using library wire (+10k code, 0k2 mem, 124 iram)
+//#define USE_I2C                                  // I2C using library wire (+10k code, 0k2 mem, 124 iram)
 
 #ifdef USE_I2C
   #define USE_SHT                                // [I2cDriver8] Enable SHT1X sensor (+1k4 code)
